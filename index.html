@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="KAD v2.4">
+<meta name="apple-mobile-web-app-title" content="KAD v2.5">
 <meta name="theme-color" content="#2B4A85">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -283,6 +283,20 @@ h1{margin:0;font-size:20px;font-weight:700;line-height:1.2}
 .mt{display:block;height:6px;background:var(--sunk);border-radius:99px;overflow:hidden;margin-top:6px}
 .mt i{display:block;height:100%;background:var(--accent);border-radius:99px}
 .jpanel p{margin:6px 0 0}
+.opt.jr{font-family:var(--kana);font-weight:var(--kana-w);font-size:22px;line-height:1.25}
+.opt.jm{font-size:16px;line-height:1.3}
+.jgh{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;margin:18px 0 8px;padding:8px 12px;border:1px solid var(--line);background:var(--sunk);border-radius:10px;font-size:14px;color:var(--muted)}
+.jgh b{font-size:14px;color:var(--ink)}
+.jgh[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent)}
+.jgh[aria-pressed="true"] b{color:var(--accent)}
+.jgrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.jgrid .cell .k{font-size:28px}
+.jw{display:flex;box-sizing:border-box;align-items:center;gap:12px;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px}
+.jw .jwk{flex:none;min-width:64px;font-size:22px;line-height:1.25}
+.jw .jwt{flex:1;min-width:0;display:flex;flex-direction:column}
+.jw .jwt b{font-family:var(--kana);font-weight:var(--kana-w);font-size:16px}
+.jw .jwt span{font-size:12.5px;color:var(--muted);line-height:1.35}
+.jw.lock{opacity:.6}
 .lec-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:0 0 8px}
 .lec-lvl{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700}
 .lec-cnt{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
@@ -542,7 +556,30 @@ var WORDS_K=[
 /* ================= Estat ================= */
 var KEY='kana-al-dit:v4';
 function blank(){ return {rows:['a','ka','sa'], st:{}, words:{}}; }
-function blankJ(){ return {rows:[], st:{}, words:{}}; }
+function blankJ(){ return {v:1, rows:['num'], st:{}, words:{}}; }
+function hasOwn(o,k){ return Object.prototype.hasOwnProperty.call(o,k); }
+function cleanN(x){ x=parseFloat(x); return (isFinite(x) && x>=0) ? x : 0; }
+function normJst(j){
+  var o={}, key;
+  if(j && typeof j==='object'){ for(key in j){ if(hasOwn(j,key)) o[key]=j[key]; } }
+  var fresh=!o.v;
+  if(!o.st || typeof o.st!=='object') o.st={};
+  if(!o.words || typeof o.words!=='object') o.words={};
+  var rows=[]; if(o.rows instanceof Array){ o.rows.forEach(function(r){ if(typeof r==='string') rows.push(r); }); }
+  o.rows=rows;
+  var st={}, k, sx, e, c, v;
+  for(k in o.st){
+    if(!hasOwn(o.st,k)) continue; e=o.st[k]; if(!e || typeof e!=='object') continue; c={};
+    for(sx in e){ if(!hasOwn(e,sx)) continue; v=e[sx]; if(v && typeof v==='object') c[sx]={ok:cleanN(v.ok), ko:cleanN(v.ko), streak:cleanN(v.streak), t:cleanN(v.t)}; }
+    st[k]=c;
+  }
+  o.st=st;
+  var ws={}; for(k in o.words){ if(!hasOwn(o.words,k)) continue; v=o.words[k]; if(v && typeof v==='object') ws[k]={ok:cleanN(v.ok), ko:cleanN(v.ko)}; }
+  o.words=ws;
+  if(!o.v) o.v=1;
+  if(fresh && !o.rows.length && !Object.keys(o.st).length) o.rows=['num'];
+  return o;
+}
 var S={script:null, font:null, app:null, trace:true, types:{rec:true,read:true,listen:true,write:true}, wtypes:{read:true,romaji:true,kana:true}, H:blank(), K:blank(), J:blankJ()};
 function loadState(){
   try{
@@ -554,7 +591,7 @@ loadState();
 if(!S.types || S.types.rec===undefined) S.types={rec:true,read:true,listen:true,write:true};
 if(!S.wtypes) S.wtypes={read:true,romaji:true,kana:true};
 if(!S.H) S.H=blank(); if(!S.K) S.K=blank();
-if(!S.J || !S.J.st || !S.J.rows) S.J=blankJ();
+S.J=normJst(S.J);
 if(S.script!=='H' && S.script!=='K') S.script=null;
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
 function P(){ return S[SCRIPT]; }
@@ -650,8 +687,8 @@ function applyChrome(home){
   if(home){ $('#sub').textContent='Tria què vols practicar'; return; }
   if(APP==='J'){
     var u=kanjiUnlocked();
-    $('#sub').textContent='Kanji · '+(u?'desbloquejat':'bloquejat');
-    $('#exLock').hidden=u; $('#tabLock').hidden=u; $('#lecLock').hidden=u; $('#cbLock').hidden=true;
+    if(u) jSub(); else $('#sub').textContent='Kanji · bloquejat';
+    $('#exLock').hidden=u; $('#tabLock').hidden=u && jWordsOpen()>0; $('#lecLock').hidden=u; $('#cbLock').hidden=true;
   } else { $('#exLock').hidden=true; }
 }
 function openOnb(){
@@ -685,7 +722,7 @@ function renderHome(){
   }
   var hl = hp ? hd+'/71 dominats' : 'El primer que s\'aprèn · 71 kana';
   var kl = kp ? kd+'/71 dominats' : 'Paraules estrangeres i rètols · 71 kana';
-  var jl = ku ? 'Desbloquejat · el contingut arriba a la v2.5'
+  var jl = ku ? (Object.keys(S.J.st).length ? jDomCount()+'/'+KJL.length+' dominats' : KJL.length+' kanji de viatge · '+JW.length+' paraules')
              : '🔒 Es desbloqueja amb '+UNLOCK+' dels 46 hiragana bàsics · '+hb+'/'+UNLOCK;
   var jx = ku ? '' : '<span class="mt"><i style="width:'+Math.round(hb/UNLOCK*100)+'%"></i></span>';
   var html='<p class="eyebrow">Què vols practicar</p><div class="hcards">'+
@@ -693,29 +730,255 @@ function renderHome(){
   if(!hp && !kp) html+='<p class="note">Si vens de la versió anterior: entra a Hiragana, ves a la Taula i toca «Importa el progrés».</p>';
   $('#homeHost').innerHTML=html;
 }
-var JV='taula', jArm=null;
+/* ================= Kanji (v2.5) ================= */
+var JGRP=[["num", "Números i diners"], ["time", "Temps"], ["dir", "Direcció i posició"], ["mov", "Moviment i accions"], ["trn", "Transport i llocs"], ["bld", "Edificis i interiors"], ["food", "Menjar i beure"], ["ppl", "Persones"], ["nat", "Natura i clima"], ["adj", "Adjectius i qualitats"], ["buy", "Compres i serveis"], ["sign", "Senyals i avisos"], ["body", "Cos i salut"], ["col", "Colors"], ["misc", "Idioma, preguntes i diversos"], ["tkt", "Bitllets i reserves"], ["svc", "Establiments i màquines"]];
+var JKAN=[["一", "num", "いち", "ichi", "1"], ["二", "num", "に", "ni", "2"], ["三", "num", "さん", "san", "3"], ["四", "num", "よん", "shi, yon", "4"], ["五", "num", "ご", "go", "5"], ["六", "num", "ろく", "roku", "6"], ["七", "num", "なな", "shichi, nana", "7"], ["八", "num", "はち", "hachi", "8"], ["九", "num", "きゅう", "kyū, ku", "9"], ["十", "num", "じゅう", "jū", "10"], ["百", "num", "ひゃく", "hyaku", "100"], ["千", "num", "せん", "sen", "1.000"], ["万", "num", "まん", "man", "10.000"], ["円", "num", "えん", "en", "iena (moneda)"], ["半", "num", "はん", "han", "meitat"], ["年", "time", "とし", "nen, toshi", "any"], ["月", "time", "", "getsu, tsuki", "mes, lluna"], ["日", "time", "", "nichi, hi", "dia, sol"], ["時", "time", "じ", "ji", "hora"], ["分", "time", "", "fun, bun", "minut, part"], ["今", "time", "いま", "ima, kon", "ara, avui"], ["毎", "time", "まい", "mai", "cada"], ["週", "time", "しゅう", "shū", "setmana"], ["曜", "time", "よう", "yō", "dia de la setmana"], ["朝", "time", "あさ", "asa, chō", "matí"], ["昼", "time", "ひる", "hiru", "migdia"], ["夜", "time", "よる", "yoru, ya", "nit"], ["午", "time", "ご", "go", "migdia (午前 matí, 午後 tarda)"], ["前", "time", "まえ", "mae, zen", "davant, abans"], ["後", "time", "", "ato, go", "després, darrere"], ["間", "time", "", "aida, kan", "entre, interval"], ["上", "dir", "", "ue, jō", "a dalt, sobre"], ["下", "dir", "", "shita, ka", "a baix, sota"], ["左", "dir", "ひだり", "hidari", "esquerra"], ["右", "dir", "みぎ", "migi", "dreta"], ["中", "dir", "", "naka, chū", "dins, mig"], ["外", "dir", "そと", "soto, gai", "fora"], ["内", "dir", "うち", "uchi, nai", "dins"], ["北", "dir", "きた", "kita", "nord"], ["南", "dir", "みなみ", "minami", "sud"], ["東", "dir", "ひがし", "higashi", "est"], ["西", "dir", "にし", "nishi", "oest"], ["方", "dir", "ほう", "kata, hō", "banda, manera"], ["向", "dir", "むかう", "mukau, kō", "anar cap a, orientat a"], ["入", "mov", "いる", "iru, nyū", "entrar"], ["出", "mov", "でる", "deru, shutsu", "sortir"], ["行", "mov", "", "iku, kō", "anar"], ["来", "mov", "くる", "kuru, rai", "venir"], ["帰", "mov", "かえる", "kaeru", "tornar"], ["買", "mov", "かう", "kau", "comprar"], ["売", "mov", "うる", "uru", "vendre"], ["食", "mov", "たべる", "taberu, shoku", "menjar"], ["飲", "mov", "のむ", "nomu", "beure"], ["見", "mov", "みる", "miru", "veure"], ["聞", "mov", "きく", "kiku", "escoltar, preguntar"], ["話", "mov", "はなす", "hanasu", "parlar"], ["読", "mov", "よむ", "yomu", "llegir"], ["書", "mov", "かく", "kaku", "escriure"], ["待", "mov", "まつ", "matsu", "esperar"], ["開", "mov", "ひらく", "aku, hiraku, kai", "obrir"], ["閉", "mov", "しめる", "shimaru, hei", "tancar"], ["乗", "mov", "のる", "noru", "pujar (a un vehicle)"], ["降", "mov", "おりる", "oriru, furu", "baixar; caure (pluja)"], ["歩", "mov", "あるく", "aruku", "caminar"], ["走", "mov", "はしる", "hashiru", "córrer"], ["止", "mov", "とまる", "tomaru, shi", "aturar-se, parar"], ["使", "mov", "つかう", "tsukau", "fer servir"], ["休", "mov", "やすむ", "yasumu", "descansar, festiu"], ["着", "mov", "つく", "tsuku, chaku", "arribar, posar-se"], ["立", "mov", "たつ", "tatsu", "estar dret, aixecar-se"], ["持", "mov", "もつ", "motsu", "portar, tenir"], ["駅", "trn", "えき", "eki", "estació"], ["電", "trn", "でん", "den", "electricitat"], ["車", "trn", "くるま", "kuruma, sha", "cotxe, vehicle"], ["道", "trn", "みち", "michi, dō", "camí, carrer"], ["口", "trn", "くち", "kuchi, guchi", "boca; entrada/sortida"], ["空", "trn", "そら", "sora, kū", "cel; buit"], ["港", "trn", "みなと", "minato", "port"], ["線", "trn", "せん", "sen", "línia (de tren)"], ["便", "trn", "びん", "bin, ben", "correu, vol; comoditat"], ["町", "trn", "まち", "machi", "barri, ciutat petita"], ["村", "trn", "むら", "mura", "poble"], ["市", "trn", "し", "shi", "ciutat; mercat"], ["国", "trn", "くに", "kuni, koku", "país"], ["県", "trn", "けん", "ken", "prefectura"], ["京", "trn", "きょう", "kyō", "capital (Tōkyō, Kyōto)"], ["都", "trn", "と", "to, miyako", "capital; metròpoli"], ["区", "trn", "く", "ku", "districte"], ["幹", "trn", "かん", "kan, miki", "tronc, línia principal (新幹線)"], ["地", "trn", "ち", "chi, ji", "terra, lloc (地下鉄 metro, 地下 soterrani)"], ["鉄", "trn", "てつ", "tetsu", "ferro (地下鉄, 鉄道 ferrocarril)"], ["店", "bld", "みせ", "mise, ten", "botiga"], ["館", "bld", "かん", "kan", "edifici públic, sala"], ["院", "bld", "いん", "in", "institució (病院 hospital)"], ["屋", "bld", "や", "ya", "botiga, habitació"], ["所", "bld", "ところ", "tokoro, sho", "lloc"], ["室", "bld", "しつ", "shitsu", "sala, habitació"], ["場", "bld", "ば", "ba", "lloc, espai"], ["門", "bld", "もん", "mon", "porta, portal"], ["階", "bld", "かい", "kai", "pis, planta"], ["建", "bld", "たてる", "tateru, ken", "construir, edifici"], ["宿", "bld", "やど", "yado, shuku", "allotjament, hostal"], ["米", "food", "こめ", "kome, bei", "arròs"], ["肉", "food", "にく", "niku", "carn"], ["魚", "food", "さかな", "sakana, gyo", "peix"], ["野", "food", "の", "no, ya", "camp; salvatge"], ["菜", "food", "さい", "sai, na", "verdura"], ["茶", "food", "ちゃ", "cha", "te"], ["酒", "food", "さけ", "sake, shu", "alcohol, sake"], ["水", "food", "みず", "mizu, sui", "aigua"], ["料", "food", "りょう", "ryō", "ingredient, tarifa"], ["理", "food", "り", "ri", "raó, ordre (料理 cuina)"], ["飯", "food", "めし", "han, meshi", "àpat; arròs cuit"], ["牛", "food", "うし", "gyū, ushi", "vaca, bou"], ["鳥", "food", "とり", "tori, chō", "ocell, pollastre"], ["味", "food", "あじ", "aji, mi", "gust, sabor"], ["辛", "food", "からい", "karai", "picant"], ["人", "ppl", "", "hito, jin", "persona"], ["男", "ppl", "おとこ", "otoko, dan", "home"], ["女", "ppl", "おんな", "onna, jo", "dona"], ["子", "ppl", "こ", "ko, shi", "nen, fill"], ["父", "ppl", "ちち", "chichi", "pare"], ["母", "ppl", "はは", "haha", "mare"], ["友", "ppl", "とも", "tomo, yū", "amic"], ["私", "ppl", "わたし", "watashi", "jo"], ["先", "ppl", "さき", "saki, sen", "abans, anterior, punta"], ["生", "ppl", "", "sei, nama", "viure, néixer; cru"], ["山", "nat", "やま", "yama, san", "muntanya"], ["川", "nat", "かわ", "kawa", "riu"], ["海", "nat", "うみ", "umi, kai", "mar"], ["天", "nat", "てん", "ten", "cel"], ["気", "nat", "き", "ki", "esperit, aire (天気 temps)"], ["雨", "nat", "あめ", "ame, u", "pluja"], ["雪", "nat", "ゆき", "yuki, setsu", "neu"], ["火", "nat", "ひ", "hi, ka", "foc"], ["木", "nat", "き", "ki, moku", "arbre, fusta"], ["土", "nat", "つち", "tsuchi, do", "terra"], ["金", "nat", "かね", "kin, kane", "or; diners"], ["花", "nat", "はな", "hana, ka", "flor"], ["大", "adj", "", "ō(kii), dai", "gran"], ["小", "adj", "", "chii(sai), shō", "petit"], ["高", "adj", "たかい", "taka(i), kō", "alt; car"], ["安", "adj", "やすい", "yasu(i), an", "barat; tranquil"], ["新", "adj", "あたらしい", "atara(shii), shin", "nou"], ["古", "adj", "ふるい", "furu(i), ko", "vell"], ["長", "adj", "ながい", "naga(i), chō", "llarg"], ["多", "adj", "おおい", "ō(i), ta", "molt"], ["少", "adj", "すくない", "suku(nai), shō", "poc"], ["早", "adj", "はやい", "haya(i), sō", "aviat; ràpid"], ["遅", "adj", "おそい", "oso(i), chi", "lent; tard"], ["強", "adj", "つよい", "tsuyo(i), kyō", "fort"], ["重", "adj", "おもい", "omo(i), jū", "pesat; important"], ["広", "adj", "ひろい", "hiro(i), kō", "ample, extens"], ["明", "adj", "あかるい", "aka(rui), mei", "clar, lluminós"], ["良", "adj", "よい", "yo(i), ryō", "bo"], ["悪", "adj", "わるい", "waru(i), aku", "dolent"], ["好", "adj", "すき", "su(ki), kō", "agradar, estimar"], ["無", "buy", "む", "nai, mu", "sense (無料 gratuït)"], ["有", "buy", "ゆう", "aru, yū", "tenir, hi ha (有料 de pagament)"], ["券", "buy", "けん", "ken", "bitllet, tiquet"], ["払", "buy", "はらう", "hara(u)", "pagar"], ["予", "buy", "よ", "yo", "per endavant (予約 reserva)"], ["約", "buy", "やく", "yaku", "promesa, aproximadament"], ["両", "buy", "りょう", "ryō", "tots dos (両替 canvi de moneda, 両方 tots dos)"], ["替", "buy", "かえる", "tai, kae(ru)", "canviar (両替)"], ["禁", "sign", "きん", "kin", "prohibit (禁止 prohibit)"], ["注", "sign", "ちゅう", "chū", "atenció; abocar (注意 compte)"], ["意", "sign", "い", "i", "sentit, atenció"], ["危", "sign", "あぶない", "abu(nai), ki", "perill"], ["険", "sign", "けん", "ken", "perillós (危険 perill)"], ["非", "sign", "ひ", "hi", "no-, negació (非常口 sortida d'emergència)"], ["常", "sign", "じょう", "jō, tsune", "normal, sempre"], ["目", "body", "め", "me, moku", "ull"], ["耳", "body", "みみ", "mimi, ji", "orella"], ["手", "body", "て", "te, shu", "mà"], ["足", "body", "あし", "ashi, soku", "peu, cama"], ["頭", "body", "あたま", "atama, tō", "cap"], ["体", "body", "からだ", "karada, tai", "cos"], ["心", "body", "こころ", "kokoro, shin", "cor, ment"], ["病", "body", "びょう", "byō, yamai", "malaltia"], ["薬", "body", "くすり", "kusuri, yaku", "medicament"], ["医", "body", "い", "i", "metge, medicina"], ["白", "col", "しろ", "shiro, haku", "blanc"], ["黒", "col", "くろ", "kuro, koku", "negre"], ["赤", "col", "あか", "aka, seki", "vermell"], ["青", "col", "あお", "ao, sei", "blau (o verd)"], ["本", "misc", "", "hon, moto", "llibre; origen (日本 Japó)"], ["語", "misc", "ご", "go, kataru", "llengua, paraula"], ["英", "misc", "えい", "ei", "Anglaterra (英語 anglès)"], ["名", "misc", "な", "na, mei", "nom"], ["何", "misc", "なに", "nani, nan", "què"], ["誰", "misc", "だれ", "dare", "qui"], ["用", "misc", "よう", "yō", "ús, assumpte"], ["事", "misc", "こと", "koto, ji", "cosa, assumpte"], ["物", "misc", "もの", "mono, butsu", "cosa, objecte"], ["荷", "misc", "に", "ni, ka", "càrrega, equipatge (荷物 equipatge)"], ["発", "tkt", "はつ", "hatsu", "sortida (tren, vol)"], ["切", "tkt", "きる", "ki(ru), setsu", "tallar (切符 bitllet)"], ["席", "tkt", "せき", "seki", "seient"], ["指", "tkt", "ゆび", "yubi, shi", "dit; assenyalar"], ["定", "tkt", "てい", "tei, sada(meru)", "fixar, establir (指定席 seient reservat)"], ["符", "tkt", "ふ", "fu", "bitllet, signe (切符 bitllet)"], ["機", "tkt", "き", "ki, hata", "màquina (券売機 màquina de bitllets)"], ["営", "svc", "えい", "ei", "gestionar, fer funcionar (営業中 obert, en servei)"], ["業", "svc", "ぎょう", "gyō", "negoci, activitat (営業時間 horari d'obertura)"], ["自", "svc", "じ", "ji, jibun", "un mateix, auto- (自動 automàtic)"], ["動", "svc", "どう", "dō, ugoku", "moure's (自動ドア, 自動販売機)"], ["泊", "svc", "はく", "haku, tomaru", "passar la nit (一泊, 二泊)"], ["満", "svc", "まん", "man, mitasu", "ple (満席 sense seients, 満室 sense habitacions)"]];
+var JWRD=[["入口", "いりぐち", "iriguchi", "entrada", "Estacions i transport"], ["出口", "でぐち", "deguchi", "sortida", "Estacions i transport"], ["東口", "ひがしぐち", "higashiguchi", "sortida est", "Estacions i transport"], ["西口", "にしぐち", "nishiguchi", "sortida oest", "Estacions i transport"], ["南口", "みなみぐち", "minamiguchi", "sortida sud", "Estacions i transport"], ["北口", "きたぐち", "kitaguchi", "sortida nord", "Estacions i transport"], ["電車", "でんしゃ", "densha", "tren", "Estacions i transport"], ["空港", "くうこう", "kūkō", "aeroport", "Estacions i transport"], ["乗車券", "じょうしゃけん", "jōshaken", "bitllet de viatge", "Estacions i transport"], ["指定席", "していせき", "shiteiseki", "seient reservat", "Estacions i transport"], ["空席", "くうせき", "kūseki", "seient lliure", "Estacions i transport"], ["満席", "まんせき", "manseki", "sense seients", "Estacions i transport"], ["発車", "はっしゃ", "hassha", "sortida del tren", "Estacions i transport"], ["出発", "しゅっぱつ", "shuppatsu", "sortida, partida", "Estacions i transport"], ["乗り場", "のりば", "noriba", "parada, andana", "Estacions i transport"], ["上り", "のぼり", "nobori", "direcció a la capital", "Estacions i transport"], ["下り", "くだり", "kudari", "direcció contrària a la capital", "Estacions i transport"], ["行き", "ゆき", "yuki", "cap a (東京行き: cap a Tòquio)", "Estacions i transport"], ["入場券", "にゅうじょうけん", "nyūjōken", "bitllet d'entrada", "Estacions i transport"], ["切符", "きっぷ", "kippu", "bitllet", "Estacions i transport"], ["切符売り場", "きっぷうりば", "kippu uriba", "taquilla de bitllets", "Estacions i transport"], ["券売機", "けんばいき", "kenbaiki", "màquina de bitllets", "Estacions i transport"], ["新幹線", "しんかんせん", "shinkansen", "tren d'alta velocitat", "Estacions i transport"], ["地下鉄", "ちかてつ", "chikatetsu", "metro", "Estacions i transport"], ["鉄道", "てつどう", "tetsudō", "ferrocarril", "Estacions i transport"], ["地下", "ちか", "chika", "subterrani, soterrani", "Estacions i transport"], ["営業中", "えいぎょうちゅう", "eigyō-chū", "obert, en servei", "Obert, tancat i horaris"], ["営業時間", "えいぎょうじかん", "eigyō jikan", "horari d'obertura", "Obert, tancat i horaris"], ["開店", "かいてん", "kaiten", "obertura de la botiga", "Obert, tancat i horaris"], ["閉店", "へいてん", "heiten", "tancament de la botiga", "Obert, tancat i horaris"], ["休み", "やすみ", "yasumi", "descans, dia lliure, tancat", "Obert, tancat i horaris"], ["休日", "きゅうじつ", "kyūjitsu", "dia festiu", "Obert, tancat i horaris"], ["定休日", "ていきゅうび", "teikyūbi", "dia de tancament setmanal", "Obert, tancat i horaris"], ["本日休業", "ほんじつきゅうぎょう", "honjitsu kyūgyō", "avui tancat", "Obert, tancat i horaris"], ["年中無休", "ねんじゅうむきゅう", "nenjū mukyū", "obert tot l'any", "Obert, tancat i horaris"], ["休業", "きゅうぎょう", "kyūgyō", "tancat temporalment", "Obert, tancat i horaris"], ["本日", "ほんじつ", "honjitsu", "avui (formal)", "Obert, tancat i horaris"], ["二十四時間", "にじゅうよじかん", "nijūyo jikan", "24 hores", "Obert, tancat i horaris"], ["一泊", "いっぱく", "ippaku", "una nit", "Hotel i llocs"], ["二泊", "にはく", "nihaku", "dues nits", "Hotel i llocs"], ["満室", "まんしつ", "manshitsu", "sense habitacions", "Hotel i llocs"], ["空室", "くうしつ", "kūshitsu", "habitació lliure", "Hotel i llocs"], ["入館", "にゅうかん", "nyūkan", "entrada a un edifici", "Hotel i llocs"], ["一階", "いっかい", "ikkai", "planta 1", "Hotel i llocs"], ["二階", "にかい", "nikai", "planta 2", "Hotel i llocs"], ["三階", "さんがい", "sangai", "planta 3", "Hotel i llocs"], ["店内", "てんない", "tennai", "dins del local", "Hotel i llocs"], ["日帰り", "ひがえり", "higaeri", "excursió d'un dia", "Hotel i llocs"], ["荷物", "にもつ", "nimotsu", "equipatge", "Hotel i llocs"], ["手荷物", "てにもつ", "tenimotsu", "equipatge de mà", "Hotel i llocs"], ["料理", "りょうり", "ryōri", "cuina, plat", "Menjar i beure"], ["食事", "しょくじ", "shokuji", "àpat", "Menjar i beure"], ["定食", "ていしょく", "teishoku", "menú del dia, plat combinat", "Menjar i beure"], ["食べ物", "たべもの", "tabemono", "menjar", "Menjar i beure"], ["飲み物", "のみもの", "nomimono", "beguda", "Menjar i beure"], ["お茶", "おちゃ", "ocha", "te", "Menjar i beure"], ["日本酒", "にほんしゅ", "nihonshu", "sake", "Menjar i beure"], ["生ビール", "なまビール", "nama bīru", "cervesa de barril", "Menjar i beure"], ["牛肉", "ぎゅうにく", "gyūniku", "carn de vedella", "Menjar i beure"], ["鳥肉", "とりにく", "toriniku", "carn d'au (pollastre)", "Menjar i beure"], ["野菜", "やさい", "yasai", "verdura", "Menjar i beure"], ["辛口", "からくち", "karakuchi", "sec (sake); picant, de gust fort", "Menjar i beure"], ["持ち帰り", "もちかえり", "mochikaeri", "per emportar", "Menjar i beure"], ["無料", "むりょう", "muryō", "gratuït", "Compres i diners"], ["有料", "ゆうりょう", "yūryō", "de pagament", "Compres i diners"], ["予約", "よやく", "yoyaku", "reserva", "Compres i diners"], ["買い物", "かいもの", "kaimono", "compres", "Compres i diners"], ["売り場", "うりば", "uriba", "secció (de botiga)", "Compres i diners"], ["売店", "ばいてん", "baiten", "quiosc, botiga petita", "Compres i diners"], ["売り切れ", "うりきれ", "urikire", "esgotat", "Compres i diners"], ["円", "えん", "en", "iena", "Compres i diners"], ["百円", "ひゃくえん", "hyaku-en", "100 iens", "Compres i diners"], ["千円", "せんえん", "sen-en", "1.000 iens", "Compres i diners"], ["一万円", "いちまんえん", "ichiman-en", "10.000 iens", "Compres i diners"], ["両替", "りょうがえ", "ryōgae", "canvi de moneda", "Compres i diners"], ["両方", "りょうほう", "ryōhō", "tots dos", "Compres i diners"], ["禁止", "きんし", "kinshi", "prohibit", "Senyals i avisos"], ["注意", "ちゅうい", "chūi", "atenció", "Senyals i avisos"], ["危険", "きけん", "kiken", "perill", "Senyals i avisos"], ["非常口", "ひじょうぐち", "hijōguchi", "sortida d'emergència", "Senyals i avisos"], ["立入禁止", "たちいりきんし", "tachiiri kinshi", "prohibit el pas", "Senyals i avisos"], ["使用禁止", "しようきんし", "shiyō kinshi", "prohibit l'ús", "Senyals i avisos"], ["使用中", "しようちゅう", "shiyō-chū", "ocupat, en ús", "Senyals i avisos"], ["自動ドア", "じどうドア", "jidō doa", "porta automàtica", "Senyals i avisos"], ["先生", "せんせい", "sensei", "professor/a, mestre/a", "Persones i país"], ["外国", "がいこく", "gaikoku", "estranger", "Persones i país"], ["外国人", "がいこくじん", "gaikokujin", "estranger (persona)", "Persones i país"], ["日本人", "にほんじん", "nihonjin", "japonès/a", "Persones i país"], ["入国", "にゅうこく", "nyūkoku", "entrada al país", "Persones i país"], ["出国", "しゅっこく", "shukkoku", "sortida del país", "Persones i país"], ["国内", "こくない", "kokunai", "nacional", "Persones i país"], ["大人", "おとな", "otona", "adult", "Persones i país"], ["一人", "ひとり", "hitori", "una persona", "Persones i país"], ["二人", "ふたり", "futari", "dues persones", "Persones i país"], ["三人", "さんにん", "sannin", "tres persones", "Persones i país"], ["今日", "きょう", "kyō", "avui", "Temps i dies"], ["明日", "あした", "ashita", "demà", "Temps i dies"], ["今朝", "けさ", "kesa", "aquest matí", "Temps i dies"], ["毎日", "まいにち", "mainichi", "cada dia", "Temps i dies"], ["毎朝", "まいあさ", "maiasa", "cada matí", "Temps i dies"], ["今週", "こんしゅう", "konshū", "aquesta setmana", "Temps i dies"], ["来週", "らいしゅう", "raishū", "setmana vinent", "Temps i dies"], ["毎週", "まいしゅう", "maishū", "cada setmana", "Temps i dies"], ["今年", "ことし", "kotoshi", "enguany", "Temps i dies"], ["来年", "らいねん", "rainen", "l'any vinent", "Temps i dies"], ["午前", "ごぜん", "gozen", "matí (a.m.)", "Temps i dies"], ["午後", "ごご", "gogo", "tarda (p.m.)", "Temps i dies"], ["時間", "じかん", "jikan", "temps, hora", "Temps i dies"], ["何時", "なんじ", "nanji", "quina hora?", "Temps i dies"], ["何分", "なんぷん", "nanpun", "quants minuts?", "Temps i dies"], ["日曜日", "にちようび", "nichiyōbi", "diumenge", "Temps i dies"], ["月曜日", "げつようび", "getsuyōbi", "dilluns", "Temps i dies"], ["火曜日", "かようび", "kayōbi", "dimarts", "Temps i dies"], ["水曜日", "すいようび", "suiyōbi", "dimecres", "Temps i dies"], ["木曜日", "もくようび", "mokuyōbi", "dijous", "Temps i dies"], ["金曜日", "きんようび", "kinyōbi", "divendres", "Temps i dies"], ["土曜日", "どようび", "doyōbi", "dissabte", "Temps i dies"], ["日本", "にほん", "nihon", "Japó", "Llocs i idioma"], ["日本語", "にほんご", "nihongo", "japonès", "Llocs i idioma"], ["英語", "えいご", "eigo", "anglès", "Llocs i idioma"], ["東京", "とうきょう", "tōkyō", "Tòquio", "Llocs i idioma"], ["京都", "きょうと", "kyōto", "Kyoto", "Llocs i idioma"], ["北海道", "ほっかいどう", "hokkaidō", "Hokkaido", "Llocs i idioma"], ["病院", "びょういん", "byōin", "hospital", "Llocs i idioma"], ["薬", "くすり", "kusuri", "medicament", "Llocs i idioma"], ["大きい", "おおきい", "ōkii", "gran", "Adjectius útils"], ["小さい", "ちいさい", "chiisai", "petit", "Adjectius útils"], ["安い", "やすい", "yasui", "barat", "Adjectius útils"], ["高い", "たかい", "takai", "car, alt", "Adjectius útils"], ["新しい", "あたらしい", "atarashii", "nou", "Adjectius útils"], ["古い", "ふるい", "furui", "vell", "Adjectius útils"], ["良い", "よい", "yoi", "bo", "Adjectius útils"], ["悪い", "わるい", "warui", "dolent", "Adjectius útils"], ["辛い", "からい", "karai", "picant", "Adjectius útils"]];
+var KJL=JKAN.map(function(a){ return {k:a[0], g:a[1], r:a[2]||null, alt:a[3], m:a[4], ms:a[4].replace(/\s*\([^)]*\)/g,'')}; });
+var JBY={}; KJL.forEach(function(it){ JBY[it.k]=it; });
+var JW=JWRD.map(function(a){
+  var ks=[]; a[0].split('').forEach(function(c){ if(JBY[c] && ks.indexOf(c)<0) ks.push(c); });
+  return {w:a[0], r:a[1], ro:a[2], m:a[3], cat:a[4], ks:ks};
+});
+var JGN={}; JGRP.forEach(function(g){ JGN[g[0]]=g[1]; });
+function jst(k,skill){ var s=S.J.st[k]; return s ? s[skill] : null; }
+function jMastered(k,skill){ var s=jst(k,skill); return !!(s && s.streak>=3); }
+function jDom(it){ return jMastered(it.k,'rec') && (it.r===null || jMastered(it.k,'read')); }
+function jLvl(it){
+  var s=S.J.st[it.k]; if(!s) return 'new';
+  var any=false, weak=false;
+  ['rec','read'].forEach(function(x){ if(s[x]){ any=true; if(s[x].ko>s[x].ok) weak=true; } });
+  if(!any) return 'new';
+  if(jDom(it)) return 'ok';
+  return weak ? 'weak' : 'learn';
+}
+function jRecord(k,skill,ok){
+  var T=S.J.st; if(!T[k]) T[k]={};
+  var s=T[k][skill] || {ok:0,ko:0,streak:0,t:0};
+  if(ok){ s.ok++; s.streak++; } else { s.ko++; s.streak=0; }
+  s.t=Date.now(); T[k][skill]=s; save();
+}
+function jWordStat(w,ok){ var s=S.J.words[w.w] || {ok:0,ko:0}; if(ok) s.ok++; else s.ko++; S.J.words[w.w]=s; save(); }
+function jWeight(k,skill){
+  var s=jst(k,skill); if(!s) return 3;
+  var w=1+s.ko*1.4-s.ok*0.35-s.streak*0.4;
+  if(Date.now()-s.t>86400000) w+=0.6;
+  return Math.max(0.25, Math.min(6,w));
+}
+function jPool(){ return KJL.filter(function(it){ return S.J.rows.indexOf(it.g)>=0; }); }
+function jDomCount(){ return KJL.filter(jDom).length; }
+function jWordOpen(w){ return w.ks.every(function(k){ return jDom(JBY[k]); }); }
+function jWordsOpen(){ return JW.filter(jWordOpen).length; }
+function jPickK(list, skill, avoid){
+  var l=list.length>1 ? list.filter(function(it){ return it.k!==avoid; }) : list;
+  var tot=0, ws=l.map(function(it){ var w=jWeight(it.k,skill); tot+=w; return w; }), x=Math.random()*tot;
+  for(var i=0;i<l.length;i++){ x-=ws[i]; if(x<=0) return l[i]; }
+  return l[l.length-1];
+}
+function jPickW(list, avoid){
+  var l=list.length>1 ? list.filter(function(w){ return w.w!==avoid; }) : list;
+  var tot=0, ws=l.map(function(w){ var s=S.J.words[w.w]||{ok:0,ko:0}; var v=Math.max(0.3, 2+s.ko-s.ok*0.6); tot+=v; return v; }), x=Math.random()*tot;
+  for(var i=0;i<l.length;i++){ x-=ws[i]; if(x<=0) return l[i]; }
+  return l[l.length-1];
+}
+function jTok(m){ return m.toLowerCase().split(/[\s,;\/]+/).filter(function(t){ return t.length>2; }); }
+function jMeaningOpts(it){
+  var out=[it], seen={}, tk=jTok(it.ms); seen[it.ms]=1;
+  function add(o){
+    if(out.length>=4 || seen[o.ms]) return;
+    var t=jTok(o.ms); for(var i=0;i<t.length;i++){ if(tk.indexOf(t[i])>=0) return; }
+    seen[o.ms]=1; out.push(o);
+  }
+  shuffle(KJL.filter(function(o){ return o.g===it.g; })).forEach(add);
+  shuffle(KJL).forEach(add);
+  return shuffle(out);
+}
+function jReadOpts(it){
+  var out=[it], seen={}; seen[it.r]=1;
+  function add(o){ if(out.length>=4 || !o.r || seen[o.r]) return; seen[o.r]=1; out.push(o); }
+  shuffle(KJL.filter(function(o){ return o.r && o.g===it.g && o.r.length===it.r.length; })).forEach(add);
+  shuffle(KJL.filter(function(o){ return o.r && Math.abs(o.r.length-it.r.length)<=1; })).forEach(add);
+  shuffle(KJL).forEach(add);
+  return shuffle(out);
+}
+function jWordOpts(w){
+  var out=[w], seen={}; seen[w.r]=1;
+  function add(o){ if(out.length>=4 || seen[o.r]) return; seen[o.r]=1; out.push(o); }
+  shuffle(JW.filter(function(o){ return Math.abs(o.r.length-w.r.length)<=1; })).forEach(add);
+  shuffle(JW).forEach(add);
+  return shuffle(out);
+}
+var JV='taula', jArm=null, JQ=null, JT={rec:true, read:true};
+function jSkillLine(it,skill,label){
+  var s=jst(it.k,skill), cls='lv-new', txt='sense practicar';
+  if(s){ if(s.streak>=3){ cls='lv-ok'; txt='dominat'; } else if(s.ko>s.ok){ cls='lv-weak'; txt='costa'; } else { cls='lv-learn'; txt='aprenent'; } txt+=' · '+s.ok+' ✓ '+s.ko+' ✗'; }
+  return '<span><i class="dot '+cls+'"></i>'+label+': '+txt+'</span>';
+}
+function jSheet(it){
+  var ws=JW.filter(function(w){ return w.ks.indexOf(it.k)>=0; }).slice(0,8);
+  var h='<div class="lsheet"><p class="big">'+it.k+'</p><p class="ro" style="font-family:var(--ui);font-size:'+(it.r?'26px':'15px')+'">'+(it.r ? it.r : 'Es llegeix dins de paraules')+'</p><p class="ca">'+it.m+'</p>';
+  h+='<p class="hint" style="margin:8px 0 0">Altres lectures: '+it.alt+'</p>';
+  h+='<div class="skills" style="align-items:flex-start;margin:14px auto 0;display:inline-flex">'+jSkillLine(it,'rec','Reconèixer')+(it.r ? jSkillLine(it,'read','Llegir') : '<span class="muted" style="font-size:12px">Llegir: només dins de paraules</span>')+'</div>';
+  if(ws.length) h+='<p class="hint" style="margin:14px 0 4px">Paraules amb aquest kanji</p><p style="margin:0;font-size:15px;line-height:1.7">'+ws.map(function(w){ return '<span class="kg">'+w.w+'</span> <span class="muted">'+w.r+'</span>'; }).join('<br>')+'</p>';
+  h+='<div class="btns" style="grid-template-columns:1fr;margin-top:16px"><button class="primary" data-s="close">Tanca</button></div></div>';
+  $('#sheet').innerHTML=h; $('#backdrop').hidden=false;
+  $('#sheet').onclick=function(e){ if(e.target.closest('[data-s="close"]')) closeSheet(); };
+}
+function jWSheet(w){
+  var h='<div class="lsheet"><p class="big" style="font-size:'+(w.w.length>4?'34px':'44px')+'">'+w.w+'</p><p class="ro" style="font-family:var(--ui);font-size:24px">'+w.r+'</p><p class="hint" style="margin:2px 0 0">'+w.ro+'</p><p class="ca">'+w.m+'</p>';
+  h+='<p class="hint" style="margin:14px 0 4px">Kanji</p><p style="margin:0;font-size:15px;line-height:1.7">'+w.ks.map(function(k){ var it=JBY[k]; return '<span class="kg">'+k+'</span> <span class="muted">'+it.ms+'</span>'; }).join('<br>')+'</p>';
+  h+='<div class="btns" style="grid-template-columns:1fr;margin-top:16px"><button class="primary" data-s="close">Tanca</button></div></div>';
+  $('#sheet').innerHTML=h; $('#backdrop').hidden=false;
+  $('#sheet').onclick=function(e){ if(e.target.closest('[data-s="close"]')) closeSheet(); };
+}
 function jRender(v){
-  JV=v;
-  var names={taula:'Taula',ex:'Exercicis',paraules:'Paraules',lectura:'Lectura'}, host=$('#jHost');
+  JV=v; JQ=null;
+  var host=$('#jHost');
   var n=domIn(S.H.st, DATA.H.BASIC);
   if(n<UNLOCK){
     host.innerHTML='<div class="panel jpanel"><p class="eyebrow">🔒 Kanji</p><p>Es desbloqueja quan dominis '+UNLOCK+' dels 46 hiragana bàsics (3 encerts seguits a Reconèixer i a Escriure).</p><span class="mt"><i style="width:'+Math.round(n/UNLOCK*100)+'%"></i></span><p class="note">'+n+'/'+UNLOCK+' dominats</p></div>';
     return;
   }
-  host.innerHTML='<div class="panel jpanel"><p class="eyebrow">'+names[v]+'</p><p>Els kanji arriben a la v2.5 (Kanji Bàsic, 200).</p></div>'+
-    (v==='taula' ? '<button class="danger" id="jReset" style="margin-top:18px">Esborra el progrés de kanji</button>' : '');
+  applyChrome(false);
+  if(v==='taula') jTaula(host);
+  else if(v==='ex') jSetup(host);
+  else if(v==='paraules') jParaules(host);
+  else host.innerHTML='<div class="panel jpanel"><p class="eyebrow">Lectura</p><p>Els textos amb kanji encara no hi són. Arribaran en una versió pròxima; ara pots practicar kanji i paraules.</p></div>';
+}
+function jSub(){ $('#sub').textContent='Kanji · '+jPool().length+' a la pràctica · '+jDomCount()+'/'+KJL.length+' dominats'; }
+function jTaula(host){
+  var h='<p class="eyebrow">Què vols practicar</p><div class="quick"><button class="chip" data-q="all" aria-pressed="'+(S.J.rows.length===JGRP.length)+'">Tots · '+KJL.length+'</button><button class="chip" data-q="none" aria-pressed="'+(S.J.rows.length===0)+'">Cap</button></div>';
+  JGRP.forEach(function(g){
+    var items=KJL.filter(function(it){ return it.g===g[0]; }), on=S.J.rows.indexOf(g[0])>=0;
+    var dom=items.filter(jDom).length;
+    h+='<button class="jgh" data-g="'+g[0]+'" aria-pressed="'+on+'"><b>'+g[1]+'</b><span>'+dom+'/'+items.length+'</span></button>';
+    h+='<div class="jgrid">'+items.map(function(it){
+      return '<button class="cell'+(on?'':' off')+'" data-k="'+it.k+'"><span class="k kg">'+it.k+'</span><span class="ro">'+(it.r||'·')+'</span><i class="dot lv-'+jLvl(it)+'"></i></button>';
+    }).join('')+'</div>';
+  });
+  h+='<div class="legend"><span><i class="dot lv-new"></i>Sense practicar</span><span><i class="dot lv-learn"></i>Aprenent</span><span><i class="dot lv-weak"></i>Costa</span><span><i class="dot lv-ok"></i>Dominat</span></div>';
+  h+='<p class="note">Un kanji queda dominat quan l\'encertes 3 cops seguits a Reconèixer i a Llegir. Els que tenen moltes lectures (el punt a sota) només necessiten Reconèixer; la lectura la practiques a Paraules. Toca el nom d\'un grup per incloure\'l o treure\'l. Toca un kanji per veure\'l.</p>';
+  h+='<button class="danger" id="jReset">Esborra el progrés de kanji</button>';
+  host.innerHTML=h; jSub();
+}
+function jSetup(host){
+  var p=jPool();
+  var h='<div id="jSetup" class="panel"><p class="eyebrow">Ronda de 10 preguntes</p><p style="margin:0">'+(p.length ? '<b>'+p.length+' kanji</b> <span class="muted">dels grups triats a la Taula</span>' : '<span class="muted">No hi ha cap grup triat. Tria\'n a la Taula.</span>')+'</p>'+
+    '<div class="types"><button class="type" data-t="rec" aria-pressed="'+JT.rec+'"><b>Reconèixer</b><span>Veus el kanji, tries què vol dir</span></button>'+
+    '<button class="type" data-t="read" aria-pressed="'+JT.read+'"><b>Llegir</b><span>Veus el kanji, tries com es llegeix</span></button></div>'+
+    '<button class="primary" data-x="start"'+(p.length ? '' : ' disabled')+'>Comença</button></div>';
+  host.innerHTML=h; jSub();
+}
+function jParaules(host){
+  var open=jWordsOpen(), h='<div class="panel"><p class="eyebrow">Paraules</p><p style="margin:0"><b>'+open+'</b> <span class="muted">de '+JW.length+' obertes. Una paraula s\'obre quan en domines tots els kanji.</span></p>'+
+    '<button class="primary" data-x="pstart" style="margin-top:12px"'+(open ? '' : ' disabled')+'>Practica paraules</button></div>';
+  var cats=[], seen={}; JW.forEach(function(w){ if(!seen[w.cat]){ seen[w.cat]=1; cats.push(w.cat); } });
+  cats.forEach(function(c){
+    h+='<p class="eyebrow">'+c+'</p>';
+    JW.filter(function(w){ return w.cat===c; }).forEach(function(w){
+      var o=jWordOpen(w);
+      if(o){ var s=S.J.words[w.w]; var cls = s && s.ok>=2 && s.ok>s.ko ? 'lv-ok' : s ? 'lv-learn' : 'lv-new';
+        h+='<button class="jw" data-w="'+w.w+'"><span class="kg jwk">'+w.w+'</span><span class="jwt"><b>'+w.r+'</b><span>'+w.m+'</span></span><i class="dot '+cls+'"></i></button>'; }
+      else {
+        var miss=w.ks.filter(function(k){ return !jDom(JBY[k]); });
+        h+='<div class="jw lock"><span class="kg jwk">'+w.w+'</span><span class="jwt"><b>🔒</b><span>Falten: '+miss.join(' ')+'</span></span></div>';
+      }
+    });
+  });
+  host.innerHTML=h; jSub();
+}
+function jDots(){
+  return '<div class="dots">'+JQ.list.map(function(_,i){ var c = i<JQ.res.length ? (JQ.res[i]?'ok':'ko') : (i===JQ.i?'cur':''); return '<i class="'+c+'"></i>'; }).join('')+'</div>';
+}
+function jStartK(){
+  var p=jPool(); if(!p.length) return;
+  var types=[]; if(JT.rec) types.push('rec'); if(JT.read) types.push('read');
+  if(!types.length) types=['rec'];
+  var readable=p.filter(function(it){ return it.r; }), list=[], last=null;
+  for(var i=0;i<10;i++){
+    var t=types[Math.floor(Math.random()*types.length)];
+    if(t==='read' && !readable.length) t='rec';
+    var it=jPickK(t==='read' ? readable : p, t, last); last=it.k;
+    list.push({it:it, type:t});
+  }
+  JQ={mode:'k', list:list, i:0, res:[], missed:[]}; jQ();
+}
+function jStartW(){
+  var o=JW.filter(jWordOpen); if(!o.length) return;
+  var list=[], last=null;
+  for(var i=0;i<10;i++){ var w=jPickW(o,last); last=w.w; list.push({it:w, type:'word'}); }
+  JQ={mode:'w', list:list, i:0, res:[], missed:[]}; jQ();
+}
+function jQ(){
+  var q=JQ.list[JQ.i], it=q.it, h='<div class="qtop">'+jDots()+'<button class="quit" data-x="quit">Surt</button></div>';
+  if(q.type==='rec'){
+    q.opts=jMeaningOpts(it);
+    h+='<p class="qlabel">Què vol dir?</p><p class="qbig kg">'+it.k+'</p><div class="opts">'+q.opts.map(function(o,i){ return '<button class="opt jm" data-o="'+i+'">'+o.ms+'</button>'; }).join('')+'</div>';
+  } else if(q.type==='read'){
+    q.opts=jReadOpts(it);
+    h+='<p class="qlabel">Com es llegeix?</p><p class="qbig kg">'+it.k+'</p><div class="opts">'+q.opts.map(function(o,i){ return '<button class="opt jr" data-o="'+i+'">'+o.r+'</button>'; }).join('')+'</div>';
+  } else {
+    q.opts=jWordOpts(it);
+    h+='<p class="qlabel">Com es llegeix?</p><p class="qbig kg" style="font-size:'+(it.w.length>4?'44px':it.w.length>2?'64px':'88px')+'">'+it.w+'</p><div class="opts">'+q.opts.map(function(o,i){ return '<button class="opt jr" data-o="'+i+'">'+o.r+'</button>'; }).join('')+'</div>';
+  }
+  h+='<div id="jAfter" class="after" hidden></div>';
+  $('#jHost').innerHTML=h; window.scrollTo(0,0);
+}
+function jAnswer(i){
+  var q=JQ.list[JQ.i], it=q.it, chosen=q.opts[i], ok=(chosen===it);
+  $$('#jHost .opt').forEach(function(b,j){ b.disabled=true; if(q.opts[j]===it) b.classList.add('right'); else if(j===i) b.classList.add('wrong'); });
+  JQ.res.push(ok);
+  var msg;
+  if(q.type==='word'){ jWordStat(it,ok); msg=(ok?'Correcte':'És '+it.r)+' · '+it.ro+' · '+it.m; }
+  else {
+    jRecord(it.k, q.type, ok);
+    msg=(ok?'Correcte':'És '+(q.type==='rec' ? it.ms : it.r))+' · '+it.k+(it.r ? ' '+it.r : '')+' · '+it.ms;
+  }
+  if(!ok) JQ.missed.push(it);
+  var af=$('#jAfter'); af.innerHTML='<p class="verdict '+(ok?'ok':'ko')+'">'+msg+'</p><button class="primary" data-x="next">Següent</button>'; af.hidden=false;
+}
+function jAdvance(){
+  JQ.i++;
+  if(JQ.i<JQ.list.length){ jQ(); return; }
+  var ok=JQ.res.filter(Boolean).length, seen={}, missed=[];
+  JQ.missed.forEach(function(it){ var key=it.w||it.k; if(!seen[key]){ seen[key]=1; missed.push(it); } });
+  var h='<div class="panel"><p class="qlabel">Ronda acabada</p><p class="score">'+ok+'/'+JQ.list.length+'</p>';
+  h+= missed.length ? '<p class="qhint">Per repassar</p><div class="misses">'+missed.map(function(it){ return it.w ? '<div class="miss"><b>'+it.w+'</b><span>'+it.r+'</span></div>' : '<div class="miss"><b>'+it.k+'</b><span>'+(it.r||it.ms)+'</span></div>'; }).join('')+'</div>' : '<p class="qhint">Cap error.</p>';
+  h+='<div class="stack"><button class="primary" data-x="again">Una altra ronda</button><button class="linkish" data-x="done">Torna enrere</button></div></div>';
+  var mode=JQ.mode; JQ.done=true; JQ.endMode=mode;
+  $('#jHost').innerHTML=h; jSub(); applyChrome(false); window.scrollTo(0,0);
 }
 $('#jHost').addEventListener('click', function(e){
-  var b=e.target.closest('#jReset'); if(!b) return;
-  clearTimeout(jArm);
-  if(b.classList.contains('armed')){
-    S.J=blankJ(); save(); b.classList.remove('armed'); b.textContent='Progrés esborrat';
-    jArm=setTimeout(function(){ if(APP==='J') jRender(JV); }, 2000);
-  } else {
-    b.classList.add('armed'); b.textContent='Toca de nou per esborrar tot el kanji';
-    jArm=setTimeout(function(){ if(APP==='J') jRender(JV); }, 3500);
+  var t, el;
+  if((el=e.target.closest('#jReset'))){
+    clearTimeout(jArm);
+    if(el.classList.contains('armed')){
+      S.J=blankJ(); save(); el.classList.remove('armed'); el.textContent='Progrés esborrat';
+      jArm=setTimeout(function(){ if(APP==='J' && JV==='taula') jRender('taula'); }, 2000);
+    } else {
+      el.classList.add('armed'); el.textContent='Toca de nou per esborrar tot el kanji';
+      jArm=setTimeout(function(){ if(APP==='J' && JV==='taula') jRender('taula'); }, 3500);
+    }
+    return;
+  }
+  if((el=e.target.closest('[data-q]'))){ S.J.rows = el.getAttribute('data-q')==='all' ? JGRP.map(function(g){ return g[0]; }) : []; save(); jTaula($('#jHost')); return; }
+  if((el=e.target.closest('[data-g]'))){ var id=el.getAttribute('data-g'), i=S.J.rows.indexOf(id); if(i>=0) S.J.rows.splice(i,1); else S.J.rows.push(id); save(); var y=window.pageYOffset; jTaula($('#jHost')); window.scrollTo(0,y); return; }
+  if((el=e.target.closest('[data-k]'))){ jSheet(JBY[el.getAttribute('data-k')]); return; }
+  if((el=e.target.closest('[data-w]'))){ var w=JW.filter(function(x){ return x.w===el.getAttribute('data-w'); })[0]; if(w) jWSheet(w); return; }
+  if((el=e.target.closest('[data-t]'))){ var tt=el.getAttribute('data-t'); JT[tt]=!JT[tt]; if(!JT.rec && !JT.read) JT[tt===('rec')?'read':'rec']=true; jSetup($('#jHost')); return; }
+  if((el=e.target.closest('[data-o]'))){ if(!el.disabled && JQ) jAnswer(parseInt(el.getAttribute('data-o'),10)); return; }
+  if((el=e.target.closest('[data-x]'))){
+    var a=el.getAttribute('data-x');
+    if(a==='start') jStartK();
+    else if(a==='pstart') jStartW();
+    else if(a==='next') jAdvance();
+    else if(a==='again'){ if(JQ && JQ.endMode==='w') jStartW(); else jStartK(); }
+    else if(a==='quit' || a==='done'){ jRender(JQ && JQ.mode==='w' ? 'paraules' : 'ex'); }
+    return;
   }
 });
+window.__jTest={JK:KJL, JW:JW, JBY:JBY, q:function(){ return JQ; }, dom:jDom, wordOpen:jWordOpen, norm:normJst, meaningOpts:jMeaningOpts, readOpts:jReadOpts};
+
 $('#homeHost').addEventListener('click', function(e){ var c=e.target.closest('[data-app]'); if(c) enterApp(c.getAttribute('data-app')); });
 $('#homeBtn').addEventListener('click', goHome);
 $$('.fchoice[data-font]').forEach(function(b){ b.addEventListener('click', function(){ S.font=b.getAttribute('data-font'); save(); applyFont(); openOnb(); }); });
@@ -1338,7 +1601,7 @@ $('#impGo').addEventListener('click', function(){
   if(!S.types || S.types.rec===undefined) S.types={rec:true,read:true,listen:true,write:true};
   if(!S.wtypes) S.wtypes={read:true,romaji:true,kana:true};
   if(!S.H) S.H=blank(); if(!S.K) S.K=blank();
-  if(!S.J || !S.J.st || !S.J.rows) S.J=blankJ();
+  S.J=normJst(S.J);
   save(); useScript(S.script||'H'); applyFont(); CB.view='home'; CB.Q=null; renderChart();
   impReset(); $('#impTxt').value=''; $('#impMsg').textContent='Progrés recuperat.';
 });
