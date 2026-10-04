@@ -297,6 +297,16 @@ h1{margin:0;font-size:20px;font-weight:700;line-height:1.2}
 .jw .jwt b{font-family:var(--kana);font-weight:var(--kana-w);font-size:16px}
 .jw .jwt span{font-size:12.5px;color:var(--muted);line-height:1.35}
 .jw.lock{opacity:.6}
+.nx{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:8px;padding:4px 0 2px}
+.nx .ghostbtn,.nx .primary{box-sizing:border-box;min-height:48px;padding:6px 4px;font-size:14px;line-height:1.15;display:flex;align-items:center;justify-content:center;text-align:center}
+#cbW .wbar{margin-top:6px}
+#cbW .wbar .ghostbtn,#cbW .wbar .primary{padding-block:10px}
+#cbW .wres{margin-top:6px;gap:4px}
+#cbW .kboxes{margin-bottom:8px}
+.qtop.cbw{margin-bottom:4px;scroll-margin-top:calc(env(safe-area-inset-top,0px) + 6px)}
+.qro.cbw{line-height:1.1;margin:0}
+.seqpad{display:none}
+.wres[hidden]+.seqpad{display:block;height:112px}
 .lec-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:0 0 8px}
 .lec-lvl{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700}
 .lec-cnt{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
@@ -2190,7 +2200,7 @@ function mountSeq(host, item, opts){
     '<div class="pad"><span class="gl gv"></span><span class="gl gh"></span><canvas aria-label="Zona per escriure amb el dit"></canvas></div>'+
     '<div class="wbar"><button class="ghostbtn" data-s="undo">Desfés</button><button class="ghostbtn" data-s="clear">Esborra</button><button class="primary" data-s="eval">Avalua</button></div>'+
     '<div class="seqnav" data-s="nav" hidden><button class="ghostbtn" data-s="prev">‹ Anterior</button><button class="ghostbtn" data-s="skip">Següent › (sense avaluar)</button></div>'+
-    '<div class="wres" data-s="res" hidden></div>';
+    '<div class="wres" data-s="res" hidden></div><div class="seqpad" aria-hidden="true"></div>';
   function q(n){ return host.querySelector('[data-s="'+n+'"]'); }
   var pad=host.querySelector('.pad'), cv=host.querySelector('canvas'), ctx=cv.getContext('2d'), size=300;
   function ink(){ return getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() || '#18202B'; }
@@ -2243,7 +2253,7 @@ function mountSeq(host, item, opts){
     q('nav').hidden=hard || finished;
     var hint=q('hint');
     if(finished){ hint.innerHTML=''; return; }
-    if(hard) hint.innerHTML='Escriu <b>el kana que et sembli</b> en aquest requadre. Quan hagis acabat, toca «Acabat».';
+    if(hard){ hint.innerHTML=''; hint.hidden=true; }
     else { var c=cells[pos]; hint.innerHTML='Requadre <b>'+(pos+1)+' de '+cells.length+'</b>: <b class="kg">'+c+'</b>'+(CB_SMALL[c] ? ' · dibuixa-la com <b class="kg">'+CB_SMALL[c]+'</b>, petita' : '')+(c==='ー' ? ' · una sola ratlla, d\'esquerra a dreta' : ''); }
     setGhost();
   }
@@ -2382,14 +2392,14 @@ function cbStartWrite(){
   for(var j=0;j<cand.length;j++){ x0-=ws[j]; if(x0<=0){ it=cand[j]; break; } }
   CB.lastW=it.key;
   var host=$('#combiHost');
-  host.innerHTML='<div class="qtop"><span class="qlabel" style="margin:0">'+(CB.hard?'Escriure · difícil':'Escriure · guiat')+'</span><button class="quit" data-cb="sec">Surt</button></div>'+
-    (CB.hard ? '<p class="qro">'+it.ro+'</p><p class="meaning">'+(it.m||'&nbsp;')+'</p>' : '<p class="qro">'+it.ro+'</p><p class="meaning">'+(it.m||'&nbsp;')+'</p>')+
-    '<div id="cbW" style="margin-top:10px"></div>';
-  window.scrollTo(0,0);
+  host.innerHTML='<div class="qtop cbw"><span class="qlabel" style="margin:0">'+(CB.hard?'Escriure · difícil':'Escriure · guiat')+'</span><button class="quit" data-cb="sec">Surt</button></div>'+
+    (CB.hard ? '<p class="qro cbw">'+it.ro+'</p><p class="meaning">'+(it.m||'&nbsp;')+'</p>' : '<p class="qro cbw">'+it.ro+'</p><p class="meaning">'+(it.m||'&nbsp;')+'</p>')+
+    '<div id="cbW" style="margin-top:6px"></div>';
   mountSeq($('#cbW'), it, {hard:CB.hard, onDone:function(ok, slot){
     if(CB.hard){ cbRecord(it.key,'write',ok); renderSub(); }
     slot.innerHTML=(CB.hard ? '' : '<p class="note" style="text-align:center;margin:8px 0 0">Mode guiat: no compta per al progrés.</p>')+'<div class="after"><button class="primary" data-cb="again">Un altre exercici</button></div>';
   }});
+  try{ host.querySelector('.qtop').scrollIntoView(true); }catch(err){ window.scrollTo(0,0); }
 }
 window.__cbTest={items:cbItems, opts:cbOptions, ro:cbRo, norm:cbNorm};
 function renderCombi(){
