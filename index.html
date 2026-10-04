@@ -297,6 +297,8 @@ h1{margin:0;font-size:20px;font-weight:700;line-height:1.2}
 .jw .jwt b{font-family:var(--kana);font-weight:var(--kana-w);font-size:16px}
 .jw .jwt span{font-size:12.5px;color:var(--muted);line-height:1.35}
 .jw.lock{opacity:.6}
+.items span[data-cbi]{cursor:pointer}
+.skills .need{display:block;margin-top:4px;color:var(--muted)}
 .nx{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:8px;padding:4px 0 2px}
 .nx .ghostbtn,.nx .primary{box-sizing:border-box;min-height:48px;padding:6px 4px;font-size:14px;line-height:1.15;display:flex;align-items:center;justify-content:center;text-align:center}
 #cbW .wbar{margin-top:6px}
@@ -2081,6 +2083,26 @@ function cbRecord(key,skill,ok){
   if(ok){ s.ok++; s.streak++; } else { s.ko++; s.streak=0; }
   s.t=Date.now(); T[key][skill]=s; save();
 }
+function cbSkillLine(key, skill, label){
+  var s=cbSk(key,skill), cls='lv-new', txt='sense practicar';
+  if(s){ if(s.streak>=3){ cls='lv-ok'; txt='dominat'; } else if(s.ko>s.ok){ cls='lv-weak'; txt='costa'; } else { cls='lv-learn'; txt='aprenent'; } txt+=' · '+s.ok+' ✓ '+s.ko+' ✗ · ratxa '+Math.min(s.streak,3)+' de 3'; }
+  return '<span><i class="dot '+cls+'"></i>'+label+': '+txt+'</span>';
+}
+function cbSheet(key){
+  var it=cbItems(CB.sec).filter(function(x){ return x.key===key; })[0]; if(!it) return;
+  var need=[], r=cbSk(key,'rec'), w=cbSk(key,'write');
+  if(!cbMastered(key,'rec')) need.push((3-(r?Math.min(r.streak,3):0))+' encert'+((3-(r?Math.min(r.streak,3):0))===1?'':'s')+' seguit'+((3-(r?Math.min(r.streak,3):0))===1?'':'s')+' a Reconèixer');
+  if(!cbMastered(key,'write')) need.push((3-(w?Math.min(w.streak,3):0))+' encert'+((3-(w?Math.min(w.streak,3):0))===1?'':'s')+' seguit'+((3-(w?Math.min(w.streak,3):0))===1?'':'s')+' a Escriure (mode difícil)');
+  $('#sheet').innerHTML='<div class="row1"><div class="facts"><span class="kg" style="font-size:30px;line-height:1.2">'+it.kana+'</span><span class="ro" style="font-size:20px">'+it.ro+'</span>'+(it.m?'<span class="muted">'+it.m+'</span>':'')+
+    '<div class="skills">'+cbSkillLine(key,'rec','Reconèixer')+cbSkillLine(key,'write','Escriure')+
+    '<span class="need">'+(need.length ? 'Et falta: '+need.join(' i ')+'.' : 'Dominat: compta per desbloquejar les paraules.')+'</span></div></div></div>'+
+    '<div class="btns">'+(hasTTS?'<button class="ghostbtn" data-s="say">▶ Escolta</button>':'<span></span>')+'<button class="primary" data-s="close">Tanca</button></div>';
+  $('#backdrop').hidden=false;
+  $('#sheet').onclick=function(e){
+    var b=e.target.closest('[data-s]'); if(!b) return; var a=b.getAttribute('data-s');
+    if(a==='say') speak(it.kana); else if(a==='close') closeSheet();
+  };
+}
 function cbItemOk(it){ return cbMastered(it.key,'rec') && cbMastered(it.key,'write'); }
 function cbSecDone(sec){ return cbItems(sec).filter(cbItemOk).length; }
 function cbSecNeed(sec){ return Math.ceil(cbItems(sec).length*0.8); }
@@ -2331,7 +2353,7 @@ function cbSection(){
     '<div class="stack" style="margin-top:14px"><button class="primary" data-cb="rec">Reconèixer</button><button class="primary" data-cb="write">Escriure</button></div>'+
     '<div class="quick" style="margin:12px 0 0"><button class="chip" data-cb="hard" aria-pressed="'+(CB.hard?'true':'false')+'">Difícil: només romaji</button></div>'+
     '<p class="note" style="margin:6px 0 0">'+(CB.hard ? 'A Escriure només veus el romaji i no saps quants requadres cal omplir. Això compta per al progrés.' : 'Mode guiat: veus els kana i un model. No compta per al progrés.')+'</p>'+
-    '<p class="eyebrow">Progrés</p><div class="items">'+items.map(function(it){ var ok=cbItemOk(it), ln=cbSk(it.key,'rec')||cbSk(it.key,'write'); return '<span class="kg '+(ok?'done':(ln?'learn':''))+'">'+it.kana+'</span>'; }).join('')+'</div>'+
+    '<p class="eyebrow">Progrés</p><div class="items">'+items.map(function(it){ var ok=cbItemOk(it), ln=cbSk(it.key,'rec')||cbSk(it.key,'write'); return '<span class="kg '+(ok?'done':(ln?'learn':''))+'" data-cbi="'+it.key+'" role="button" tabindex="0">'+it.kana+'</span>'; }).join('')+'</div>'+
     '<p class="note">Un element queda dominat quan l\'encertes 3 cops seguits a Reconèixer i 3 cops seguits a Escriure (en mode difícil). Quan en tens '+cbSecNeed(sec)+' de '+items.length+', les paraules d\'aquesta secció surten a Paraules.</p>';
   host.innerHTML=h;
 }
@@ -2406,6 +2428,7 @@ function renderCombi(){
   if(CB.view==='sec') cbSection(); else cbHome();
 }
 $('#combiHost').addEventListener('click', function(e){
+  var ci=e.target.closest('[data-cbi]'); if(ci){ cbSheet(ci.getAttribute('data-cbi')); return; }
   var s=e.target.closest('[data-sec]'); if(s){ CB.sec=s.getAttribute('data-sec'); CB.view='sec'; cbSection(); window.scrollTo(0,0); return; }
   var b=e.target.closest('[data-cb]'); if(!b) return;
   var a=b.getAttribute('data-cb');
